@@ -16,6 +16,7 @@ eval env = \case
   Pi x a b -> VPi x (eval env a) \ ~v -> eval (env :> v) b
   Lam x t -> VLam x \v -> eval (env :> v) t
   App t u -> eval env t $$ eval env u
+  InsertedMeta m l -> vInsertedMeta m l
 
 vMeta :: MetaVar -> Val
 vMeta m = case lookupMeta m of
@@ -40,6 +41,18 @@ vAppSp :: Val -> Sp -> Val
 vAppSp t [] = t
 vAppSp t (sp :> u) = vAppSp t sp $$ u
 
+vInsertedMeta :: MetaVar -> Lvl -> Val
+vInsertedMeta m l = case lookupMeta m of
+  Unsolved -> VFlex m (idSp l)
+  Solved t -> do
+    let go 0 = t
+        go l = go (l - 1) $$ VVar (l - 1)
+    go l
+
+idSp :: Lvl -> Sp
+idSp 0 = []
+idSp l = idSp (l - 1) :> VVar (l - 1)
+
 --------------------------------------------------------------------------------
 
 force :: Val -> Val
@@ -59,7 +72,7 @@ pushChoice c t t' = case (force t, force t') of
   (t, VLam x' t') -> VLam x' \v -> VChoice c (t $$ v) (t' v)
   (VU, VU) -> VU
   (VPi x a b, VPi x' a' b') -> VPi (NChoice c x x') (VChoice c a a') \ ~v -> VChoice c (b v) (b' v)
-  -- How should we handle nested choice here?
+  -- TODO: How should we handle nested choice here?
   (t, t') -> VChoice c t t'
 
 --------------------------------------------------------------------------------

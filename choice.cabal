@@ -28,6 +28,7 @@ library
       Evaluation
       Metacontext
       Syntax
+      Unification
       Value
   other-modules:
       Paths_choice

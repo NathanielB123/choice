@@ -23,6 +23,7 @@ newtype ChoiceVar = ChoiceVar Int
 data Name
   = Name String
   | NChoice ChoiceVar Name Name
+  | NX Lvl
   deriving stock (Show)
 
 instance Eq Name where

@@ -3,6 +3,7 @@ module Metacontext
     newMeta,
     readMeta,
     lookupMeta,
+    writeMeta,
     ChoiceEntry (..),
     newChoice,
     readChoice,
@@ -47,6 +48,9 @@ readMeta m = do
 
 lookupMeta :: MetaVar -> MetaEntry
 lookupMeta = unsafeDupablePerformIO . readMeta
+
+writeMeta :: MetaVar -> Val -> IO ()
+writeMeta m sol = modifyIORef' metaCtx $ IM.insert (coerce m) (Solved sol)
 
 --------------------------------------------------------------------------------
 
