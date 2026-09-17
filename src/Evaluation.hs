@@ -24,9 +24,9 @@ vMeta m = case lookupMeta m of
 
 vChoice :: ChoiceVar -> Val -> Val -> Val
 vChoice c ~tl ~tr = case lookupChoice c of
-  B -> VChoice c tl tr
   L -> tl
   R -> tr
+  B -> pushChoice c tl tr
 
 ($$) :: Val -> Val -> Val
 t $$ ~u = case t of
@@ -44,10 +44,23 @@ vAppSp t (sp :> u) = vAppSp t sp $$ u
 
 force :: Val -> Val
 force = \case
-  VFlex m sp | Solved t <- lookupMeta m -> vAppSp t sp
-  VChoice c tl _ | L <- lookupChoice c -> tl
-  VChoice c _ tr | R <- lookupChoice c -> tr
+  VFlex m sp | Solved t <- lookupMeta m -> force (vAppSp t sp)
+  VChoice c tl tr -> case lookupChoice c of
+    L -> tl
+    R -> tr
+    B -> pushChoice c tl tr
   t -> t
+
+-- assumes c is an unsolved choicevar
+pushChoice :: ChoiceVar -> Val -> Val -> Val
+pushChoice c t t' = case (force t, force t') of
+  (VLam x t, VLam x' t') -> VLam (NChoice c x x') \v -> VChoice c (t v) (t' v)
+  (VLam x t, t') -> VLam x \v -> VChoice c (t v) (t' $$ v)
+  (t, VLam x' t') -> VLam x' \v -> VChoice c (t $$ v) (t' v)
+  (VU, VU) -> VU
+  (VPi x a b, VPi x' a' b') -> VPi (NChoice c x x') (VChoice c a a') \ ~v -> VChoice c (b v) (b' v)
+  -- How should we handle nested choice here?
+  (t, t') -> VChoice c t t'
 
 --------------------------------------------------------------------------------
 
