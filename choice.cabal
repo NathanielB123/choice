@@ -1,0 +1,97 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.39.6.
+--
+-- see: https://github.com/sol/hpack
+
+name:           choice
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/wasabi315/choice#readme>
+homepage:       https://github.com/wasabi315/choice#readme
+bug-reports:    https://github.com/wasabi315/choice/issues
+author:         Satoshi Takimoto
+maintainer:     wasabi.nvim.st@gmail.com
+copyright:      2026 Satoshi Takimoto
+license:        BSD-3-Clause
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/wasabi315/choice
+
+library
+  exposed-modules:
+      Common
+      Evaluation
+      Metacontext
+      Syntax
+      Value
+  other-modules:
+      Paths_choice
+  autogen-modules:
+      Paths_choice
+  hs-source-dirs:
+      src
+  default-extensions:
+      AllowAmbiguousTypes
+      BlockArguments
+      CPP
+      DerivingVia
+      DeriveAnyClass
+      DuplicateRecordFields
+      MultilineStrings
+      MultiParamTypeClasses
+      NoFieldSelectors
+      OrPatterns
+      OverloadedLabels
+      OverloadedStrings
+      OverloadedRecordDot
+      PatternSynonyms
+      QualifiedDo
+      RecordWildCards
+      Strict
+      TypeFamilies
+      ViewPatterns
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wno-missing-pattern-synonym-signatures -Wmissing-deriving-strategies -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-name-shadowing -O2 -funbox-strict-fields -optP-Wno-nonportable-include-path
+  build-depends:
+      base >=4.7 && <5
+    , containers
+  default-language: GHC2024
+
+executable choice
+  main-is: Main.hs
+  other-modules:
+      Paths_choice
+  autogen-modules:
+      Paths_choice
+  hs-source-dirs:
+      app
+  default-extensions:
+      AllowAmbiguousTypes
+      BlockArguments
+      CPP
+      DerivingVia
+      DeriveAnyClass
+      DuplicateRecordFields
+      MultilineStrings
+      MultiParamTypeClasses
+      NoFieldSelectors
+      OrPatterns
+      OverloadedLabels
+      OverloadedStrings
+      OverloadedRecordDot
+      PatternSynonyms
+      QualifiedDo
+      RecordWildCards
+      Strict
+      TypeFamilies
+      ViewPatterns
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wno-missing-pattern-synonym-signatures -Wmissing-deriving-strategies -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-name-shadowing -O2 -funbox-strict-fields -optP-Wno-nonportable-include-path
+  build-depends:
+      base >=4.7 && <5
+    , choice
+    , containers
+  default-language: GHC2024

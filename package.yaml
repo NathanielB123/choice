@@ -1,0 +1,72 @@
+name: choice
+version: 0.1.0.0
+github: "wasabi315/choice"
+license: BSD-3-Clause
+author: "Satoshi Takimoto"
+maintainer: "wasabi.nvim.st@gmail.com"
+copyright: "2026 Satoshi Takimoto"
+
+extra-source-files:
+  - README.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description: Please see the README on GitHub at <https://github.com/wasabi315/choice#readme>
+
+dependencies:
+  - base >= 4.7 && < 5
+  - containers
+
+language: GHC2024
+
+default-extensions:
+  - AllowAmbiguousTypes
+  - BlockArguments
+  - CPP
+  - DerivingVia
+  - DeriveAnyClass
+  - DuplicateRecordFields
+  - MultilineStrings
+  - MultiParamTypeClasses
+  - NoFieldSelectors
+  - OrPatterns
+  - OverloadedLabels
+  - OverloadedStrings
+  - OverloadedRecordDot
+  - PatternSynonyms
+  - QualifiedDo
+  - RecordWildCards
+  - Strict
+  - TypeFamilies
+  - ViewPatterns
+
+ghc-options:
+  - -Wall
+  - -Wcompat
+  - -Widentities
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wno-missing-pattern-synonym-signatures
+  - -Wmissing-deriving-strategies
+  - -Wmissing-home-modules
+  - -Wpartial-fields
+  - -Wredundant-constraints
+  - -Wno-name-shadowing
+  - -O2
+  - -funbox-strict-fields
+  - -optP-Wno-nonportable-include-path
+
+library:
+  source-dirs: src
+
+executables:
+  choice:
+    main: Main.hs
+    source-dirs: app
+    dependencies:
+      - choice
