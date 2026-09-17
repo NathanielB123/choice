@@ -39,9 +39,42 @@ m : ℕ, n : ℕ ⊢ ?0 m n n ≟ Fin n
 m : ℕ, n : ℕ ⊢ Fin (m | n) ≟ Fin n
 ```
 
-At this point, we can determine that the the left can't satisfy the equation, and refine so that the choice selects the right branch. Now, `?0` computes to `λ m n o → Fin o`, which is the solution we want.
+At this point, we can determine that the the left branch can't satisfy the equation, and can refine so that the choice selects the right branch. Now, `?0` computes to `λ m n o → Fin o`, which is the solution we want.
 
 So, roughly speaking, the idea is to keep a finite set of possible unifiers, and let other constraints rule out alternatives.
+
+## Alternative
+
+Actually, Agda can solve the example problem!
+
+```agda
+open import Relation.Binary.PropositionalEquality
+open import Data.Nat
+open import Data.Fin
+
+test : Set
+test =
+  let α : ℕ → ℕ → ℕ → Set
+      α = _ in
+
+  let p : ∀ m n → α m n m ≡ Fin m
+      p _ _ = refl in
+
+  let q : ∀ m n → α m n n ≡ Fin n
+      q _ _ = refl in
+
+  ℕ
+```
+
+Agda prunes the second argument of `α` when solving the constraint for `p`, because `n` doesn't occur in the RHS:
+
+```agda
+α ≔ λ m n o → β m o
+```
+
+Now the constraint for `q` becomes `m : ℕ, n : ℕ ⊢ β m n ≡ Fin n`, which is inside the pattern fragment.
+
+I'm not sure which is stronger.
 
 ## Acknowledgment
 
