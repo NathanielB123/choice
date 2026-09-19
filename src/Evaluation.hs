@@ -33,7 +33,7 @@ vChoice c ~tl ~tr = case lookupChoice c of
 -- | Types can be meta-headed, but never flexibly coerced
 assertFHMeta :: FlexHead -> a -> a
 assertFHMeta FHMeta     c = c
-assertFHMeta (FHCoe {}) _ = undefined
+assertFHMeta (FHCoe {}) _ = error "impossible"
 
 vCoe :: VTy -> VTy -> Val -> Val
 vCoe a b t = case t of
