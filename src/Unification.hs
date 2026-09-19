@@ -37,29 +37,53 @@ invert :: Lvl -> Sp -> IO PartialRenaming
 invert gamma sp = do
   let go :: Sp -> IO (Lvl, IM.IntMap Lvl)
       go [] = pure (0, mempty)
-      go (sp :> t) = do
+      go (sp :> SApp t) = do
         (dom, ren) <- go sp
         case force t of
           VVar (Lvl x) | IM.notMember x ren -> pure (dom + 1, IM.insert x dom ren)
           -- choice can't be inverted
           _ -> throwIO UnifyError
+      -- TODO: Inverting non-reflexive coercions?
+      -- (Need to extend partial renamings)
+      go (_ :> SCoe {}) = throwIO UnifyError
 
-  (dom, ren) <- go sp
+  (dom, ren) <- go $ forceSp gamma sp
   pure $ PRen dom gamma ren
+
+-- Filter reflexive coercions
+forceSp :: Lvl -> Sp -> Sp
+forceSp l (sp :> SApp t)   = forceSp l sp :> SApp t
+forceSp l (sp :> SCoe a b)
+  | pureConv l a b = forceSp l sp
+  | otherwise      = forceSp l sp :> SCoe a b
+forceSp _ [] = []
 
 -- | Perform the partial renaming on rhs, while also checking for "m" occurrences.
 rename :: MetaVar -> PartialRenaming -> Val -> IO Tm
 rename m pren v = go pren v
   where
+    -- TODO: Double-check pren.dom is correct here?
     goSp :: PartialRenaming -> Tm -> Sp -> IO Tm
-    goSp _ t [] = pure t
-    goSp pren t (sp :> u) = App <$> goSp pren t sp <*> go pren u
+    goSp pren t sp = goSp' pren t $ forceSp pren.dom sp
+
+    goSp' :: PartialRenaming -> Tm -> Sp -> IO Tm
+    goSp' _ t [] = pure t
+    goSp' pren t (sp :> SApp u) = App <$> goSp pren t sp <*> go pren u
+    goSp' pren t (sp :> SCoe a b) =
+      Coe <$> go pren a <*> go pren b <*> goSp pren t sp
+
+    goFH :: PartialRenaming -> FlexHead -> Tm -> IO Tm
+    goFH _ FHMeta             t = pure t
+    goFH pren (FHCoe a bsp t) b =
+      Coe <$> go pren a <*> goSp pren b bsp <*> go pren t
 
     go :: PartialRenaming -> Val -> IO Tm
     go pren t = case force t of
-      VFlex m' sp
+      VFlex m' h sp
         | m == m' -> throwIO UnifyError -- occurs check
-        | otherwise -> goSp pren (Meta m') sp
+        | otherwise -> do
+          t' <- goFH pren h $ Meta m'
+          goSp pren t' sp
       VRigid (Lvl x) sp -> case IM.lookup x pren.ren of
         Nothing -> throwIO UnifyError -- scope error ("escaping variable" error)
         Just x' -> goSp pren (Var $ lvl2Ix pren.dom x') sp
@@ -67,6 +91,7 @@ rename m pren v = go pren v
       VPi x a b -> Pi x <$> go pren a <*> go (lift pren) (b $ VVar pren.cod)
       VU -> pure U
       VChoice c t u -> Choice c <$> go pren t <*> go pren u
+      VErr -> throwIO UnifyError
 
 {-
 Wrap a term in lambdas.
@@ -85,24 +110,72 @@ solve gamma m sp rhs = do
   let solution = eval [] $ lams pren.dom rhs
   writeMeta m solution
 
-unifySp :: Lvl -> Sp -> Sp -> IO ()
+class Monad m => UnifyMonad m where
+  trySolve  :: Lvl -> MetaVar -> Sp -> Val -> m ()
+  stuck    :: m ()
+  mismatch :: m ()
+
+instance UnifyMonad IO where
+  trySolve  = solve
+  stuck     = throwIO UnifyError -- meta we couldn't solve
+  mismatch  = throwIO UnifyError -- rigid mismatch error
+
+data PureUnify a = Conv a | Stuck | Mismatch
+  deriving stock Functor
+
+instance Applicative PureUnify where
+  pure = Conv
+  Conv f   <*> x = f <$> x
+  -- TODO: We might be able to have
+  -- > _ <*> Anti = Anti
+  -- it's not clear to me exactly when this safe
+  Stuck    <*> _ = Stuck
+  Mismatch <*> _ = Mismatch
+
+instance Monad PureUnify where
+  Conv x   >>= f = f x
+  Stuck    >>= _ = Stuck
+  Mismatch >>= _ = Mismatch
+
+instance UnifyMonad PureUnify where
+  trySolve _ _ _ _ = Stuck
+  stuck            = Stuck
+  mismatch         = Mismatch
+
+isConv :: PureUnify a -> Bool
+isConv (Conv _) = True
+isConv Stuck    = False
+isConv Mismatch = False
+
+pureConv :: Lvl -> Val -> Val -> Bool
+pureConv l t u = isConv $ unify l t u
+
+unifySp :: UnifyMonad m => Lvl -> Sp -> Sp -> m ()
 unifySp l sp sp' = case (sp, sp') of
   ([], []) -> pure ()
-  (sp :> t, sp' :> t') -> unifySp l sp sp' >> unify l t t'
-  _ -> throwIO UnifyError -- rigid mismatch error
+  (sp :> SApp t, sp' :> SApp t') -> unifySp l sp sp' >> unify l t t'
+  -- TODO: How to handle coercions here?
+  _ -> mismatch
 
-unify :: Lvl -> Val -> Val -> IO ()
+unify :: UnifyMonad m => Lvl -> Val -> Val -> m ()
 unify l t u = case (force t, force u) of
+  -- Error values always throw mismatch errors
+  (VErr, _) -> mismatch
+  (_, VErr) -> mismatch
   (VLam _ t, VLam _ t') -> unify (l + 1) (t $ VVar l) (t' $ VVar l)
   (t, VLam _ t') -> unify (l + 1) (t $$ VVar l) (t' $ VVar l)
   (VLam _ t, t') -> unify (l + 1) (t $ VVar l) (t' $$ VVar l)
   (VU, VU) -> pure ()
   (VPi _ a b, VPi _ a' b') -> unify l a a' >> unify (l + 1) (b $ VVar l) (b' $ VVar l)
   (VRigid x sp, VRigid x' sp') | x == x' -> unifySp l sp sp'
-  (VFlex m sp, VFlex m' sp') | m == m' -> unifySp l sp sp'
-  (VFlex m sp, t') -> solve l m sp t'
-  (t, VFlex m' sp') -> solve l m' sp' t
+  (VFlex m FHMeta sp, VFlex m' FHMeta sp') | m == m' -> unifySp l sp sp'
+  (VFlex m FHMeta sp, t') -> trySolve l m sp t'
+  (t, VFlex m' FHMeta sp') -> trySolve l m' sp' t
+  -- TODO: Can we do something with flex coercions here?
+  -- Maybe try to unify domain/codomain?
+  (VFlex _ FHCoe {} _, _) -> stuck
+  (_, VFlex _ FHCoe {} _) -> stuck
   (VChoice c tl tr, VChoice c' tl' tr') -> error "TODO"
   (VChoice c tl tr, t') -> error "TODO"
   (t, VChoice c tl' tr') -> error "TODO"
-  _ -> throwIO UnifyError -- rigid mismatch error
+  _ -> mismatch
