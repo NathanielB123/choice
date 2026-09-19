@@ -112,8 +112,10 @@ solve gamma m sp rhs = do
 
 class Monad m => UnifyMonad m where
   trySolve  :: Lvl -> MetaVar -> Sp -> Val -> m ()
-  stuck    :: m ()
-  mismatch :: m ()
+  -- Right-now distinguishing 'stuck' and 'mismatch' doesn't really matter but
+  -- I think it is good to be disciplined here
+  stuck     :: m ()
+  mismatch  :: m ()
 
 instance UnifyMonad IO where
   trySolve  = solve
@@ -126,9 +128,6 @@ data PureUnify a = Conv a | Stuck | Mismatch
 instance Applicative PureUnify where
   pure = Conv
   Conv f   <*> x = f <$> x
-  -- TODO: We might be able to have
-  -- > _ <*> Anti = Anti
-  -- it's not clear to me exactly when this safe
   Stuck    <*> _ = Stuck
   Mismatch <*> _ = Mismatch
 
