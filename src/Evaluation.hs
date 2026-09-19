@@ -62,12 +62,6 @@ vCoe a b t = case t of
 
   VErr -> VErr
 
-vAppSp :: Val -> Sp -> Val
-vAppSp t [] = t
-vAppSp t (sp :> SApp u)   = vAppSp t sp $$ u
-vAppSp t (sp :> SCoe a b) = vCoe a b $ vAppSp t sp
-
-
 ($$) :: Val -> Val -> Val
 t $$ ~u = case t of
   VLam _ f        -> f u
@@ -76,6 +70,11 @@ t $$ ~u = case t of
   VChoice c tl tr -> VChoice c (tl $$ u) (tr $$ u)
   VU; VPi {}      -> error "impossible"
   VErr            -> VErr
+
+vAppSp :: Val -> Sp -> Val
+vAppSp t [] = t
+vAppSp t (sp :> SApp u)   = vAppSp t sp $$ u
+vAppSp t (sp :> SCoe a b) = vCoe a b $ vAppSp t sp
 
 vInsertedMeta :: MetaVar -> Lvl -> Val
 vInsertedMeta m l = case lookupMeta m of
