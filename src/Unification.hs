@@ -10,7 +10,7 @@ import Value
 
 --------------------------------------------------------------------------------
 
-data UnifyError = UnifyError
+newtype UnifyError = UnifyError String
   deriving stock (Show)
   deriving anyclass (Exception)
 
@@ -42,10 +42,11 @@ invert gamma sp = do
         case force t of
           VVar (Lvl x) | IM.notMember x ren -> pure (dom + 1, IM.insert x dom ren)
           -- choice can't be inverted
-          _ -> throwIO UnifyError
+          _ -> throwIO $ UnifyError "Tried to invert choice"
       -- TODO: Inverting non-reflexive coercions?
       -- (Need to extend partial renamings)
-      go (_ :> SCoe {}) = throwIO UnifyError
+      go (_ :> SCoe {}) =
+        throwIO $ UnifyError "Tried to invert non-reflexive coercion"
 
   (dom, ren) <- go $ forceSp gamma sp
   pure $ PRen dom gamma ren
@@ -80,18 +81,20 @@ rename m pren v = go pren v
     go :: PartialRenaming -> Val -> IO Tm
     go pren t = case force t of
       VFlex m' h sp
-        | m == m' -> throwIO UnifyError -- occurs check
+        -- occurs check
+        | m == m' -> throwIO $ UnifyError "Occurs fail"
         | otherwise -> do
           t' <- goFH pren h $ Meta m'
           goSp pren t' sp
       VRigid (Lvl x) sp -> case IM.lookup x pren.ren of
-        Nothing -> throwIO UnifyError -- scope error ("escaping variable" error)
+        -- ("escaping variable" error)
+        Nothing -> throwIO $ UnifyError "Scope error"
         Just x' -> goSp pren (Var $ lvl2Ix pren.dom x') sp
       VLam x t -> Lam x <$> go (lift pren) (t $ VVar pren.cod)
       VPi x a b -> Pi x <$> go pren a <*> go (lift pren) (b $ VVar pren.cod)
       VU -> pure U
       VChoice c t u -> Choice c <$> go pren t <*> go pren u
-      VErr -> throwIO UnifyError
+      VErr -> error "impossible"
 
 {-
 Wrap a term in lambdas.
@@ -114,13 +117,15 @@ class Monad m => UnifyMonad m where
   trySolve  :: Lvl -> MetaVar -> Sp -> Val -> m ()
   -- Right-now distinguishing 'stuck' and 'mismatch' doesn't really matter but
   -- I think it is good to be disciplined here
-  stuck     :: m ()
-  mismatch  :: m ()
+  stuck     :: String -> m ()
+  mismatch  :: String -> m ()
 
 instance UnifyMonad IO where
-  trySolve  = solve
-  stuck     = throwIO UnifyError -- meta we couldn't solve
-  mismatch  = throwIO UnifyError -- rigid mismatch error
+  trySolve = solve
+  -- meta we couldn't solve
+  stuck s = throwIO $ UnifyError s
+  -- rigid mismatch error
+  mismatch s = throwIO $ UnifyError s
 
 data PureUnify a = Conv a | Stuck | Mismatch
   deriving stock Functor
@@ -138,8 +143,8 @@ instance Monad PureUnify where
 
 instance UnifyMonad PureUnify where
   trySolve _ _ _ _ = Stuck
-  stuck            = Stuck
-  mismatch         = Mismatch
+  stuck s = Stuck
+  mismatch s = Mismatch
 
 isConv :: PureUnify a -> Bool
 isConv (Conv _) = True
@@ -153,14 +158,19 @@ unifySp :: UnifyMonad m => Lvl -> Sp -> Sp -> m ()
 unifySp l sp sp' = case (sp, sp') of
   ([], []) -> pure ()
   (sp :> SApp t, sp' :> SApp t') -> unifySp l sp sp' >> unify l t t'
-  -- TODO: How to handle coercions here?
-  _ -> mismatch
+  (sp :> SCoe a b, sp')
+    | pureConv l a b -> unifySp l sp sp'
+    | otherwise -> stuck "Tried to unify non-reflexive coercion"
+  (sp, sp' :> SCoe a' b')
+    | pureConv l a' b' -> unifySp l sp sp'
+    | otherwise -> stuck "Tried to unify non-reflexive coercion"
+  _ -> mismatch "Tried to unify spines of different length"
 
 unify :: UnifyMonad m => Lvl -> Val -> Val -> m ()
 unify l t u = case (force t, force u) of
   -- Error values always throw mismatch errors
-  (VErr, _) -> mismatch
-  (_, VErr) -> mismatch
+  (VErr, _) -> mismatch "Ill-typed coercion"
+  (_, VErr) -> mismatch "Ill-typed coercion"
   (VLam _ t, VLam _ t') -> unify (l + 1) (t $ VVar l) (t' $ VVar l)
   (t, VLam _ t') -> unify (l + 1) (t $$ VVar l) (t' $ VVar l)
   (VLam _ t, t') -> unify (l + 1) (t $ VVar l) (t' $$ VVar l)
@@ -172,9 +182,9 @@ unify l t u = case (force t, force u) of
   (t, VFlex m' FHMeta sp') -> trySolve l m' sp' t
   -- TODO: Can we do something with flex coercions here?
   -- Maybe try to unify domain/codomain?
-  (VFlex _ FHCoe {} _, _) -> stuck
-  (_, VFlex _ FHCoe {} _) -> stuck
+  (VFlex _ FHCoe {} _, _) -> stuck "Tried to unify flexible coercion"
+  (_, VFlex _ FHCoe {} _) -> stuck "Tried to unify flexible coercion"
   (VChoice c tl tr, VChoice c' tl' tr') -> error "TODO"
   (VChoice c tl tr, t') -> error "TODO"
   (t, VChoice c tl' tr') -> error "TODO"
-  _ -> mismatch
+  _ -> mismatch "Rigid head mismatch"
